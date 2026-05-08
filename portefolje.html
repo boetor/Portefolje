@@ -137,18 +137,32 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
 .sett-desc{font-size:12px;color:var(--t2);margin-top:2px;}
 .msg{font-size:12px;font-family:var(--mono);min-height:18px;}
 
-/* Mobile extras hidden on desktop */
-.mobile-extra { display:none; }
+/* Mobile card layout */
+.tbl-wrap { display:block; }
+.card-list { display:none; }
 @media(max-width:640px){
-  .col-hide { display:none !important; }
-  .mobile-extra { display:block; margin-top:3px; }
-  tbody td { padding:9px 10px; font-size:13px; }
-  thead th { padding:8px 10px; }
-  .btn-del { padding:8px 10px; }
+  .tbl-wrap { display:none; }
+  .card-list { display:block; background:var(--s1); border:1px solid var(--b1); border-radius:var(--rl); overflow:hidden; }
+  .pos-card { padding:13px 14px; border-bottom:1px solid var(--b1); }
+  .pos-card:last-child { border-bottom:none; }
+  .pos-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .pos-card-name { font-weight:600; font-size:15px; }
+  .pos-card-sub { font-size:11px; color:var(--t2); margin-top:2px; }
+  .pos-card-right { text-align:right; flex-shrink:0; }
+  .pos-card-val { font-family:var(--mono); font-weight:600; font-size:15px; }
+  .pos-card-gev { font-family:var(--mono); font-size:12px; margin-top:2px; }
+  .pos-card-bottom { display:flex; align-items:center; justify-content:space-between; margin-top:8px; }
+  .pos-card-detail { display:none; background:rgba(77,124,254,.04); border-left:3px solid var(--acc); padding:10px 12px; margin-top:8px; border-radius:0 var(--r) var(--r) 0; }
+  .pos-card-detail.open { display:block; }
+  .detail-row { display:flex; justify-content:space-between; font-size:12px; padding:3px 0; }
+  .detail-row span:first-child { color:var(--t2); }
+  .detail-row span:last-child { font-family:var(--mono); }
   .hdr h1 { font-size:20px; }
   .m-val { font-size:18px; }
   .tabs { width:100%; }
-  .tab { flex:1; text-align:center; padding:7px 4px; font-size:11px; }
+  .tab { flex:1; text-align:center; padding:7px 3px; font-size:11px; }
+  .hdr-btns { width:100%; }
+  .hdr-btns .btn { flex:1; justify-content:center; }
 }
 @media(max-width:640px){
   .frow{grid-template-columns:1fr 1fr;}
@@ -192,19 +206,18 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
   <div class="tbl-wrap">
     <table>
       <thead><tr>
-        <th>Selskap</th>
-        <th class="col-hide">Kilde</th>
-        <th class="col-hide">Kurs (NOK)</th>
-        <th class="tr col-hide">Antall</th>
-        <th class="tr">Markedsverdi</th>
-        <th class="tc col-hide">I dag</th>
-        <th class="tr">Gevinst/tap</th>
+        <th>Selskap</th><th>Kilde</th><th>Kurs (NOK)</th>
+        <th class="tr">Antall</th><th class="tr">Markedsverdi</th>
+        <th class="tc">I dag</th><th class="tr">Gevinst/tap</th>
         <th></th>
       </tr></thead>
       <tbody id="tbl-body">
         <tr><td colspan="8"><div class="empty">Ingen posisjoner – importer CSV eller legg til manuelt</div></td></tr>
       </tbody>
     </table>
+  </div>
+  <div class="card-list" id="card-list">
+    <div class="empty" style="padding:32px;">Ingen posisjoner – importer CSV eller legg til manuelt</div>
   </div>
   <div id="src-summary" class="src-summary"></div>
 </div>
@@ -887,8 +900,1238 @@ function renderHoldings() {
   }
   document.getElementById('src-summary').innerHTML = sumHtml;
   document.getElementById('m-src').textContent = 'fra ' + srcKeys.length + ' megler' + (srcKeys.length===1?'':'e');
+
+  // ---- MOBILE CARD LAYOUT ----
+  var cardList = document.getElementById('card-list');
+  if (!cardList) return;
+  if (!holdings.length) {
+    cardList.innerHTML = '<div class="empty" style="padding:32px;">Ingen posisjoner</div>';
+    return;
+  }
+
+  function mkCard(key, group) {
+    var totalMv = group.reduce(function(s,x){return s+(x.h.mv||0);},0);
+    var totalAnt = group.reduce(function(s,x){return s+(x.h.antall||0);},0);
+    var allGev = group.every(function(x){return x.h.gevinst!=null;});
+    var totalGev = allGev ? group.reduce(function(s,x){return s+x.h.gevinst;},0) : null;
+    var allKost = group.every(function(x){return x.h.kostpris!=null;});
+    var totalKost = allKost ? group.reduce(function(s,x){return s+x.h.kostpris;},0) : null;
+    var avgKurs = totalAnt>0 ? totalMv/totalAnt : null;
+    var dagVals = group.filter(function(x){return x.h.dagPct!=null;});
+    var avgDag = dagVals.length ? dagVals.reduce(function(s,x){return s+x.h.dagPct;},0)/dagVals.length : null;
+    var gavSum=0,gavAnt=0;
+    for(var i=0;i<group.length;i++){if(group[i].h.kostpris&&group[i].h.antall){gavSum+=(group[i].h.kostpris/group[i].h.antall)*group[i].h.antall;gavAnt+=group[i].h.antall;}}
+    var avgGav = gavAnt>0 ? gavSum/gavAnt : null;
+    var dispN = dispName(group[0].h.navn);
+    var multi = group.length > 1;
+    var isExp = expanded[key];
+
+    // Source badges
+    var srcStr = '', seen={};
+    for(var i=0;i<group.length;i++){
+      var kd=group[i].h.kilde;
+      if(!seen[kd]){seen[kd]=true;
+        var sc={nordnet:'src-n',dnbrapport:'src-d',sparebank1:'src-s',skagen:'src-k',manuell:'src-m'}[kd]||'src-m';
+        var sl={nordnet:'Nordnet',dnbrapport:'DNB',sparebank1:'Sparebank 1',skagen:'Skagen',manuell:'Manuell',ukjent:'Ukjent'}[kd]||kd;
+        srcStr += '<span class="src '+sc+'">'+sl+'</span>';
+      }
+    }
+    var metaStr = srcStr + (avgKurs ? ' <span style="font-size:11px;color:var(--t3);font-family:var(--mono);">'+f2(avgKurs)+' NOK'+(avgGav?' · GAV:'+f2(avgGav):'')+'</span>' : '');
+    var expArrow = multi ? ' <span style="color:var(--acc);font-size:11px;">'+(isExp?'▲':'▼')+' '+group.length+'</span>' : '';
+
+    var gevColor = totalGev!=null ? (totalGev>=0 ? 'var(--grn)' : 'var(--red)') : 'var(--t2)';
+    var gevStr = totalGev!=null ? (totalGev>=0?'+':'')+fNok(totalGev) : '—';
+    var gevPct = totalGev!=null && totalKost ? ' ('+( totalGev>=0?'+':'')+f2(totalGev/totalKost*100)+'%)' : '';
+    var dagTag = avgDag!=null ? '<span class="tag '+(avgDag>=0?'t-grn':'t-red')+'">'+(avgDag>=0?'+':'')+f2(avgDag)+'%</span>' : '';
+
+    var safeKey = key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
+    var html = '<div class="pos-card" onclick="toggleCardGroup(\''+safeKey+'\')">'+
+      '<div class="pos-card-top">'+
+        '<div><div class="pos-card-name">'+dispN+expArrow+'</div><div class="pos-card-meta">'+metaStr+'</div></div>'+
+        '<div class="pos-card-right">'+
+          '<div class="pos-card-val">'+fNok(totalMv)+'</div>'+
+          '<div class="pos-card-gev" style="color:'+gevColor+';">'+gevStr+'<span style="font-size:11px;">'+gevPct+'</span></div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="pos-card-bot"><div>'+dagTag+'</div>'+
+      '<button class="btn btn-del" style="padding:6px 10px;" onclick="event.stopPropagation();removeGroup(\''+safeKey+'\')">✕</button>'+
+      '</div>';
+
+    if (isExp) {
+      for(var i=0;i<group.length;i++){
+        var h=group[i].h, oi=group[i].idx;
+        var sc2={nordnet:'src-n',dnbrapport:'src-d',sparebank1:'src-s',skagen:'src-k',manuell:'src-m'}[h.kilde]||'src-m';
+        var sl2={nordnet:'Nordnet',dnbrapport:'DNB',sparebank1:'Sparebank 1',skagen:'Skagen',manuell:'Manuell',ukjent:'Ukjent'}[h.kilde]||h.kilde;
+        var hGav=h.kostpris&&h.antall ? h.kostpris/h.antall : null;
+        var upPct=hGav&&h.kurs ? (h.kurs-hGav)/hGav*100 : null;
+        var upStr = upPct!=null ? ' <span style="color:'+(upPct>=0?'var(--grn)':'var(--red)')+';">'+(upPct>=0?'▲':'▼')+f2(Math.abs(upPct))+'%</span>' : '';
+        var gevColor2 = h.gevinst!=null ? (h.gevinst>=0?'var(--grn)':'var(--red)') : 'var(--t2)';
+        html += '<div class="pos-sub-card open">'+
+          '<div class="sub-row"><span>Megler</span><span><span class="src '+sc2+'">'+sl2+'</span></span></div>'+
+          '<div class="sub-row"><span>Antall</span><span>'+f2(h.antall,0)+'</span></div>'+
+          '<div class="sub-row"><span>Kurs</span><span>'+f2(h.kurs)+' NOK</span></div>'+
+          (hGav ? '<div class="sub-row"><span>GAV</span><span>'+f2(hGav)+' NOK'+upStr+'</span></div>' : '')+
+          '<div class="sub-row"><span>Verdi</span><span>'+fNok(h.mv)+'</span></div>'+
+          (h.gevinst!=null ? '<div class="sub-row"><span>Gevinst/tap</span><span style="color:'+gevColor2+';">'+(h.gevinst>=0?'+':'')+fNok(h.gevinst)+'</span></div>' : '')+
+          '<div style="text-align:right;margin-top:6px;"><button class="btn btn-del btn-sm" onclick="event.stopPropagation();removeOne('+oi+')">Fjern</button></div>'+
+          '</div>';
+      }
+    }
+    html += '</div>';
+    return html;
+  }
+
+  var cardHtml = '';
+  for (var gi=0; gi<order.length; gi++) {
+    cardHtml += mkCard(order[gi], groups[order[gi]]);
+  }
+  cardList.innerHTML = cardHtml;
 }
 
+function toggleCardGroup(key) {
+  expanded[key] = !expanded[key];
+  renderHoldings();
+}
+function toggleGroup(key) {
+  expanded[key] = !expanded[key];
+  renderHoldings();
+}
+
+function removeGroup(key) {
+  if (!confirm('Fjerne alle posisjoner i dette selskapet?')) return;
+  holdings = holdings.filter(function(h) { return norm(h.navn) !== key; });
+  save(); renderHoldings(); updateMetrics();
+}
+
+function removeOne(idx) {
+  if (!confirm('Fjerne denne posisjonen?')) return;
+  holdings.splice(idx, 1);
+  save(); renderHoldings(); updateMetrics();
+}
+
+function updateMetrics() {
+  var tv = 0, tg = 0, tk = 0, hasG = false, hasK = false;
+  for (var i = 0; i < holdings.length; i++) {
+    tv += holdings[i].mv || 0;
+    if (holdings[i].gevinst != null) { tg += holdings[i].gevinst; hasG = true; }
+    if (holdings[i].kostpris != null) { tk += holdings[i].kostpris; hasK = true; }
+  }
+  document.getElementById('m-val').textContent = tv ? fNok(tv) : '—';
+  document.getElementById('m-pos').textContent = holdings.length;
+  if (hasG) {
+    var cls = tg >= 0 ? 'grn' : 'red';
+    document.getElementById('m-gev').innerHTML = '<span class="' + cls + '">' + (tg>=0?'+':'') + fNok(tg) + '</span>';
+    document.getElementById('m-gev-sub').innerHTML = hasK && tk ? '<span class="' + cls + '">' + (tg>=0?'+':'') + f2(tg/tk*100) + '% av kostpris</span>' : '';
+  }
+  var sources = [...new Set(holdings.map(function(h) { return h.kilde; }))].filter(function(s) { return s !== 'manuell'; });
+  var lbl = {nordnet:'Nordnet',dnbrapport:'DNB',sparebank1:'Sparebank 1',skagen:'Skagen'}
+  document.getElementById('m-imp').textContent = sources.map(function(s) { return lbl[s]||s; }).join(', ') || (holdings.length ? 'Manuell' : '—');
+  document.getElementById('m-imp-sub').textContent = holdings.length + ' posisjoner totalt';
+}
+
+// ═══════════════════════════════════════════════
+// MANUELL
+// ═══════════════════════════════════════════════
+function addManuell() {
+  var navn = document.getElementById('m-navn').value.trim();
+  var antall = parseFloat(document.getElementById('m-antall').value);
+  var kurs = parseFloat(document.getElementById('m-kurs').value);
+  var kostprisPerAksje = parseFloat(document.getElementById('m-kostpris').value) || null;
+  var msg = document.getElementById('m-msg');
+  if (!navn || !antall || !kurs) { msg.style.color='var(--red)'; msg.textContent='Fyll inn navn, antall og kurs.'; return; }
+  var mv = kurs * antall;
+  var kostpris = kostprisPerAksje ? kostprisPerAksje * antall : null;
+  holdings.push({navn:navn, antall:antall, kurs:kurs, mv:mv, kostpris:kostpris, gevinst:kostpris?mv-kostpris:null, dagPct:null, kilde:'manuell'});
+  save(); renderHoldings(); updateMetrics();
+  document.getElementById('m-navn').value = '';
+  document.getElementById('m-antall').value = '';
+  document.getElementById('m-kurs').value = '';
+  document.getElementById('m-kostpris').value = '';
+  msg.style.color='var(--grn)'; msg.textContent='✓ Lagt til.';
+  setTimeout(function() { msg.textContent=''; }, 3000);
+}
+
+// ═══════════════════════════════════════════════
+// NEWS
+// ═══════════════════════════════════════════════
+function fetchNews() {
+  var key = localStorage.getItem('anth_key') || '';
+  if (!key) {
+    document.getElementById('news-body').innerHTML = '<div style="padding:18px 20px;color:var(--amb);">⚠ Legg inn Anthropic API-nøkkel i Innstillinger.</div>';
+    return;
+  }
+  if (!holdings.length) { document.getElementById('news-body').innerHTML = '<div class="empty">Legg til posisjoner først.</div>'; return; }
+  var btn = document.getElementById('btn-news');
+  btn.textContent = '⟳ Analyserer…'; btn.disabled = true;
+  document.getElementById('news-body').innerHTML = '<div class="loading"><span class="spinner"></span> Henter og analyserer nyheter…</div>';
+  var names = [];
+  var seen = {};
+  for (var i = 0; i < Math.min(holdings.length, 10); i++) {
+    var n = norm(holdings[i].navn);
+    if (!seen[n]) { seen[n] = true; names.push(holdings[i].navn); }
+  }
+  fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST', mode:'cors',
+    headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body: JSON.stringify({
+      model:'claude-sonnet-4-20250514', max_tokens:1200,
+      tools:[{type:'web_search_20250305',name:'web_search'}],
+      system:'Du er norsk finansanalytiker. Søk etter siste nyheter. Returner KUN JSON-array: [{"navn":"...","headline":"...","summary":"...","sentiment":"positiv|negativ|nøytral","anbefaling":"kjøp|hold|selg|avvent","begrunnelse":"..."}]',
+      messages:[{role:'user',content:'Analyser siste nyheter for: '+names.join(', ')+'. Svar KUN med JSON-array.'}]
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    var txt = (d.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('').replace(/```json|```/g,'').trim();
+    var items = JSON.parse(txt);
+    var sCol = {positiv:'var(--grn)',negativ:'var(--red)',nøytral:'var(--t3)'};
+    var rCls = {kjøp:'t-grn',selg:'t-red',hold:'t-neu',avvent:'t-amb'};
+    document.getElementById('news-body').innerHTML = items.map(function(it) {
+      return '<div class="news-item">'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">'
+        + '<span style="font-weight:600;">' + it.navn + '</span>'
+        + '<span class="tag ' + (rCls[it.anbefaling]||'t-neu') + '">' + (it.anbefaling||'—').toUpperCase() + '</span>'
+        + '<span style="width:7px;height:7px;border-radius:50%;background:' + (sCol[it.sentiment]||'var(--t3)') + ';display:inline-block;"></span>'
+        + '<span style="font-size:12px;color:var(--t3);">' + it.sentiment + '</span>'
+        + '</div>'
+        + '<div class="news-hl">' + it.headline + '</div>'
+        + '<div class="news-sum">' + it.summary + '</div>'
+        + '<div class="news-ai"><strong>AI-vurdering:</strong> ' + it.begrunnelse + '</div>'
+        + '</div>';
+    }).join('');
+  })
+  .catch(function(e) {
+    document.getElementById('news-body').innerHTML = '<div style="padding:18px 20px;color:var(--red);">Feil: ' + e.message + '</div>';
+  })
+  .finally(function() { btn.textContent='✦ Hent analyse'; btn.disabled=false; });
+}
+
+// ═══════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════
+function saveSetting(lsKey, inputId, msg) {
+  var val = document.getElementById(inputId).value.trim();
+  if (!val) return;
+  if (lsKey === 'proxy_url') PROXY = val.replace(/\/$/, '');
+  localStorage.setItem(lsKey, val);
+  showMsg('s-msg', msg, 'var(--grn)');
+}
+function saveRates() {
+  USD_NOK = parseFloat(document.getElementById('s-usd').value) || 10.5;
+  localStorage.setItem('usd_nok', USD_NOK);
+  showMsg('s-msg', 'Valutakurs lagret ✓', 'var(--grn)');
+}
+function resetPortfolio() {
+  if (!confirm('Er du sikker? Sletter alle posisjoner.')) return;
+  holdings = []; save(); renderHoldings(); updateMetrics();
+  showMsg('s-msg', 'Portefølje nullstilt ✓', 'var(--grn)');
+}
+function showMsg(id, txt, color) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.color = color;
+  el.textContent = txt;
+  setTimeout(function() { el.textContent = ''; }, 3000);
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+load();
+renderHoldings();
+updateMetrics();
+document.getElementById('s-proxy').value = PROXY;
+document.getElementById('s-usd').value = USD_NOK;
+var ak = document.getElementById('s-anth');
+if (ak) ak.value = localStorage.getItem('anth_key') || '';
+if (holdings.length > 0 && PROXY) setTimeout(refreshAllQuotes, 800);
+
+</script>
+</body>
+.tbl-wrap { display:block; }
+.card-list { display:none; }
+@media(max-width:640px){
+  .tbl-wrap { display:none !important; }
+  .card-list { display:block; background:var(--s1); border:1px solid var(--b1); border-radius:var(--rl); overflow:hidden; }
+  .pos-card { padding:13px 14px; border-bottom:1px solid var(--b1); cursor:pointer; }
+  .pos-card:last-child { border-bottom:none; }
+  .pos-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .pos-card-name { font-weight:600; font-size:15px; }
+  .pos-card-meta { font-size:11px; color:var(--t3); margin-top:3px; font-family:var(--mono); }
+  .pos-card-right { text-align:right; flex-shrink:0; }
+  .pos-card-val { font-family:var(--mono); font-weight:600; font-size:15px; }
+  .pos-card-gev { font-family:var(--mono); font-size:12px; margin-top:2px; }
+  .pos-card-bot { display:flex; align-items:center; justify-content:space-between; margin-top:6px; }
+  .pos-sub-card { background:rgba(77,124,254,.05); border-left:3px solid var(--acc); padding:10px 12px; margin-top:6px; border-radius:0 var(--r) var(--r) 0; display:none; }
+  .pos-sub-card.open { display:block; }
+  .sub-row { display:flex; justify-content:space-between; font-size:12px; padding:3px 0; border-bottom:1px solid var(--b1); }
+  .sub-row:last-child { border-bottom:none; }
+  .sub-row span:first-child { color:var(--t2); }
+  .sub-row span:last-child { font-family:var(--mono); text-align:right; }
+  .hdr h1 { font-size:20px; }
+  .m-val { font-size:18px; }
+  .tabs { width:100%; }
+  .tab { flex:1; text-align:center; padding:7px 3px; font-size:11px; }
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--t1);font-family:var(--sans);font-size:15px;min-height:100vh;}
+.app{max-width:1040px;margin:0 auto;padding:28px 20px 80px;}
+
+/* HEADER */
+.hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:28px;gap:16px;flex-wrap:wrap;}
+.hdr h1{font-size:24px;font-weight:600;letter-spacing:-.3px;}
+.hdr-sub{font-size:12px;color:var(--t3);font-family:var(--mono);margin-top:3px;}
+.hdr-btns{display:flex;gap:8px;flex-wrap:wrap;}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--r);border:1px solid var(--b2);background:var(--s1);color:var(--t1);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.btn:hover{background:var(--s2);border-color:rgba(255,255,255,.18);}
+.btn:active{transform:scale(.98);}
+.btn-p{background:var(--acc);border-color:var(--acc);color:#fff;}
+.btn-p:hover{opacity:.88;background:var(--acc);}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--t2);}
+.btn-ghost:hover{background:var(--s1);color:var(--t1);border-color:var(--b1);}
+.btn-del{color:var(--red);background:transparent;border-color:transparent;padding:5px 8px;}
+.btn-del:hover{background:var(--red2);}
+.btn-sm{font-size:12px;padding:5px 12px;}
+
+/* METRICS */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:24px;}
+.metric{background:var(--s1);border:1px solid var(--b1);border-radius:var(--rl);padding:16px 18px;}
+.m-label{font-size:11px;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;}
+.m-val{font-size:21px;font-weight:600;font-family:var(--mono);letter-spacing:-1px;}
+.m-sub{font-size:12px;color:var(--t2);margin-top:4px;font-family:var(--mono);}
+.grn{color:var(--grn);} .red{color:var(--red);}
+
+/* TABS */
+.tabs{display:flex;gap:2px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);padding:3px;margin-bottom:20px;width:fit-content;flex-wrap:wrap;}
+.tab{padding:7px 16px;border-radius:6px;font-size:13px;font-weight:500;color:var(--t2);cursor:pointer;transition:all .15s;border:none;background:transparent;font-family:var(--sans);}
+.tab:hover{color:var(--t1);}
+.tab.active{background:var(--s2);color:var(--t1);border:1px solid var(--b2);}
+
+/* TABLE */
+.tbl-wrap{background:var(--s1);border:1px solid var(--b1);border-radius:var(--rl);overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead th{font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--t3);padding:11px 14px;text-align:left;border-bottom:1px solid var(--b1);font-weight:400;}
+tbody td{padding:11px 14px;border-bottom:1px solid var(--b1);font-size:14px;vertical-align:middle;}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:rgba(255,255,255,.02);}
+.tr{text-align:right;} .tc{text-align:center;}
+
+/* TAGS */
+.tag{display:inline-flex;align-items:center;font-size:11px;font-family:var(--mono);padding:2px 7px;border-radius:4px;font-weight:500;}
+.t-grn{background:var(--grn2);color:var(--grn);}
+.t-red{background:var(--red2);color:var(--red);}
+.t-neu{background:var(--s2);color:var(--t2);}
+.t-acc{background:var(--acc2);color:var(--acc);}
+.t-amb{background:var(--amb2);color:var(--amb);}
+
+/* SOURCE BADGES */
+.src{font-size:10px;font-family:var(--mono);padding:2px 6px;border-radius:4px;margin-right:3px;}
+.src-n{background:rgba(0,180,100,.15);color:#00b464;}
+.src-d{background:rgba(0,100,220,.15);color:#0064dc;}
+.src-s{background:rgba(200,50,50,.15);color:#c83232;}
+.src-k{background:rgba(200,140,0,.15);color:#c88c00;}
+.src-m{background:var(--s2);color:var(--t3);}
+
+/* CARDS/SECTIONS */
+.card{background:var(--s1);border:1px solid var(--b1);border-radius:var(--rl);padding:20px;}
+.card-title{font-size:15px;font-weight:600;margin-bottom:4px;}
+.card-sub{font-size:13px;color:var(--t2);margin-bottom:18px;}
+
+/* FORM */
+.frow{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end;}
+.fg label{font-size:11px;font-family:var(--mono);color:var(--t3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px;}
+.inp{width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--b2);border-radius:var(--r);color:var(--t1);font-size:14px;font-family:var(--sans);outline:none;transition:border-color .15s;}
+.inp:focus{border-color:var(--acc);}
+.inp::placeholder{color:var(--t3);}
+
+/* DROP ZONE */
+.drop{border:2px dashed var(--b2);border-radius:var(--rl);padding:36px 24px;text-align:center;cursor:pointer;transition:all .2s;position:relative;margin-bottom:16px;}
+.drop:hover,.drop.over{border-color:var(--acc);background:var(--acc2);}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.drop-icon{font-size:28px;margin-bottom:10px;}
+.drop-title{font-size:15px;font-weight:600;margin-bottom:4px;}
+.drop-desc{font-size:13px;color:var(--t2);}
+
+/* BROKER GUIDE */
+.broker-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;margin-top:16px;}
+.broker-card{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:12px 14px;}
+.broker-name{font-weight:600;font-size:13px;margin-bottom:6px;}
+.broker-steps{font-size:12px;color:var(--t2);line-height:1.7;}
+.broker-steps code{font-family:var(--mono);background:var(--s1);padding:1px 5px;border-radius:3px;font-size:11px;}
+
+/* IMPORT LOG */
+.imp-result{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:14px 16px;margin-top:12px;font-size:13px;}
+.imp-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--b1);}
+.imp-row:last-child{border-bottom:none;}
+
+/* NEWS */
+.news-item{padding:18px 20px;border-bottom:1px solid var(--b1);}
+.news-item:last-child{border-bottom:none;}
+.news-hl{font-size:14px;font-weight:600;margin-bottom:4px;}
+.news-sum{font-size:13px;color:var(--t2);margin-bottom:8px;line-height:1.6;}
+.news-ai{background:var(--s2);border-left:3px solid var(--acc);padding:10px 14px;border-radius:0 var(--r) var(--r) 0;font-size:13px;color:var(--t2);line-height:1.6;}
+
+/* MISC */
+.empty{text-align:center;padding:40px;color:var(--t3);font-size:14px;}
+.spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.1);border-top-color:var(--acc);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading{display:flex;align-items:center;gap:8px;padding:18px 20px;color:var(--t2);font-size:14px;}
+.info-box{background:var(--acc2);border:1px solid rgba(77,124,254,.2);border-radius:var(--r);padding:12px 16px;font-size:13px;color:var(--t2);line-height:1.6;margin-bottom:16px;}
+.src-summary{padding:8px 0;font-size:12px;color:var(--t2);}
+.mn-inp{font-family:var(--mono);font-size:13px;padding:5px 9px;background:var(--bg);border:1px solid var(--b2);border-radius:var(--r);color:var(--t1);width:100px;outline:none;}
+.mn-inp:focus{border-color:var(--acc);}
+.sett-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--b1);gap:12px;flex-wrap:wrap;}
+.sett-row:last-child{border-bottom:none;}
+.sett-lbl{font-size:14px;font-weight:500;}
+.sett-desc{font-size:12px;color:var(--t2);margin-top:2px;}
+.msg{font-size:12px;font-family:var(--mono);min-height:18px;}
+
+/* Mobile card layout */
+.tbl-wrap { display:block; }
+.card-list { display:none; }
+@media(max-width:640px){
+  .tbl-wrap { display:none; }
+  .card-list { display:block; background:var(--s1); border:1px solid var(--b1); border-radius:var(--rl); overflow:hidden; }
+  .pos-card { padding:13px 14px; border-bottom:1px solid var(--b1); }
+  .pos-card:last-child { border-bottom:none; }
+  .pos-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .pos-card-name { font-weight:600; font-size:15px; }
+  .pos-card-sub { font-size:11px; color:var(--t2); margin-top:2px; }
+  .pos-card-right { text-align:right; flex-shrink:0; }
+  .pos-card-val { font-family:var(--mono); font-weight:600; font-size:15px; }
+  .pos-card-gev { font-family:var(--mono); font-size:12px; margin-top:2px; }
+  .pos-card-bottom { display:flex; align-items:center; justify-content:space-between; margin-top:8px; }
+  .pos-card-detail { display:none; background:rgba(77,124,254,.04); border-left:3px solid var(--acc); padding:10px 12px; margin-top:8px; border-radius:0 var(--r) var(--r) 0; }
+  .pos-card-detail.open { display:block; }
+  .detail-row { display:flex; justify-content:space-between; font-size:12px; padding:3px 0; }
+  .detail-row span:first-child { color:var(--t2); }
+  .detail-row span:last-child { font-family:var(--mono); }
+  .hdr h1 { font-size:20px; }
+  .m-val { font-size:18px; }
+  .tabs { width:100%; }
+  .tab { flex:1; text-align:center; padding:7px 3px; font-size:11px; }
+  .hdr-btns { width:100%; }
+  .hdr-btns .btn { flex:1; justify-content:center; }
+}
+@media(max-width:640px){
+  .frow{grid-template-columns:1fr 1fr;}
+  .metrics{grid-template-columns:1fr 1fr;}
+  .tabs{width:100%;}
+  .tab{flex:1;text-align:center;padding:7px 6px;font-size:12px;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="hdr">
+  <div>
+    <h1>Min portefølje</h1>
+    <div class="hdr-sub" id="sub-line">Ingen data lastet</div>
+  </div>
+  <div class="hdr-btns">
+    <button class="btn btn-ghost" id="btn-refresh" onclick="refreshAllQuotes()">↻ Oppdater kurser</button>
+    <button class="btn btn-ghost" onclick="showTab('import')">↑ Importer CSV</button>
+  </div>
+</div>
+
+<div class="metrics">
+  <div class="metric"><div class="m-label">Total verdi</div><div class="m-val" id="m-val">—</div><div class="m-sub" id="m-sub"></div></div>
+  <div class="metric"><div class="m-label">Urealisert gevinst</div><div class="m-val" id="m-gev">—</div><div class="m-sub" id="m-gev-sub"></div></div>
+  <div class="metric"><div class="m-label">Posisjoner</div><div class="m-val" id="m-pos">0</div><div class="m-sub" id="m-src"></div></div>
+  <div class="metric"><div class="m-label">Sist importert</div><div class="m-val" id="m-imp" style="font-size:14px;line-height:1.4;">—</div><div class="m-sub" id="m-imp-sub"></div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" id="tab-holdings" onclick="showTab('holdings')">Beholdning</button>
+  <button class="tab" id="tab-news" onclick="showTab('news')">Nyheter & analyse</button>
+  <button class="tab" id="tab-import" onclick="showTab('import')">↑ Importer CSV</button>
+  <button class="tab" id="tab-manuell" onclick="showTab('manuell')">+ Manuell</button>
+  <button class="tab" id="tab-settings" onclick="showTab('settings')">⚙ Innstillinger</button>
+</div>
+
+<!-- BEHOLDNING -->
+<div id="view-holdings">
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Selskap</th><th>Kilde</th><th>Kurs (NOK)</th>
+        <th class="tr">Antall</th><th class="tr">Markedsverdi</th>
+        <th class="tc">I dag</th><th class="tr">Gevinst/tap</th>
+        <th></th>
+      </tr></thead>
+      <tbody id="tbl-body">
+        <tr><td colspan="8"><div class="empty">Ingen posisjoner – importer CSV eller legg til manuelt</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card-list" id="card-list">
+    <div class="empty" style="padding:32px;">Ingen posisjoner – importer CSV eller legg til manuelt</div>
+  </div>
+  <div id="src-summary" class="src-summary"></div>
+</div>
+
+<!-- NYHETER -->
+<div id="view-news" style="display:none;">
+  <div class="tbl-wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--b1);">
+      <div><div style="font-weight:600;">AI-nyhetsanalyse</div><div style="font-size:13px;color:var(--t2);margin-top:2px;">Kjøp/salg-vurdering for dine posisjoner</div></div>
+      <button class="btn btn-p btn-sm" id="btn-news" onclick="fetchNews()">✦ Hent analyse</button>
+    </div>
+    <div id="news-body"><div class="empty">Trykk «Hent analyse» – krever Anthropic API-nøkkel i Innstillinger</div></div>
+  </div>
+</div>
+
+<!-- IMPORTER -->
+<div id="view-import" style="display:none;">
+  <div class="card" style="margin-bottom:12px;">
+    <div class="card-title">Importer fra megler</div>
+    <div class="card-sub">Støtter Nordnet (TAB-separert), DNB rapport (semikolon) og Sparebank 1</div>
+    <div class="drop" id="drop-zone">
+      <input type="file" accept=".csv,.txt" multiple onchange="onFileSelect(event)"/>
+      <div class="drop-icon">📂</div>
+      <div class="drop-title">Slipp CSV-filer her, eller klikk for å velge</div>
+      <div class="drop-desc">Du kan importere fra flere meglere. Eksisterende posisjoner beholdes.</div>
+    </div>
+    <div id="imp-log"></div>
+  </div>
+  <div class="broker-grid">
+    <div class="broker-card"><div class="broker-name" style="color:#00b464;">Nordnet</div><div class="broker-steps">Portefølje → <code>Eksporter</code> → <code>CSV</code></div></div>
+    <div class="broker-card"><div class="broker-name" style="color:#0064dc;">DNB</div><div class="broker-steps">Sparing → konto → <code>Last ned rapport</code></div></div>
+    <div class="broker-card"><div class="broker-name" style="color:#c83232;">Sparebank 1</div><div class="broker-steps">Fond & aksjer → <code>Eksporter CSV</code></div></div>
+    <div class="broker-card"><div class="broker-name" style="color:#c88c00;">Skagen/Storebrand</div><div class="broker-steps">Mine fond → <code>Last ned oversikt</code></div></div>
+  </div>
+</div>
+
+<!-- MANUELL -->
+<div id="view-manuell" style="display:none;">
+  <div class="card">
+    <div class="card-title">Legg til manuelt</div>
+    <div class="card-sub">For aksjer som ikke er i megler-eksporten</div>
+    <div class="frow">
+      <div class="fg"><label>Selskapsnavn</label><input class="inp" id="m-navn" placeholder="f.eks. Equinor"/></div>
+      <div class="fg"><label>Antall</label><input class="inp" type="number" id="m-antall" placeholder="100"/></div>
+      <div class="fg"><label>Kurs (NOK)</label><input class="inp" type="number" id="m-kurs" placeholder="265.40"/></div>
+      <div class="fg"><label>&nbsp;</label><button class="btn btn-p" onclick="addManuell()">+ Legg til</button></div>
+    </div>
+    <div class="fg" style="margin-top:10px;"><label>Kostpris per aksje (valgfri)</label><input class="inp" type="number" id="m-kostpris" placeholder="200.00" style="width:160px;"/></div>
+    <div class="msg grn" id="m-msg" style="margin-top:8px;"></div>
+  </div>
+</div>
+
+<!-- INNSTILLINGER -->
+<div id="view-settings" style="display:none;">
+  <div class="card">
+    <div class="card-title" style="margin-bottom:20px;">Innstillinger</div>
+    <div class="sett-row">
+      <div><div class="sett-lbl">Cloudflare Worker URL</div><div class="sett-desc">Din proxy for automatiske kurser (Oslo Børs)</div></div>
+      <div style="display:flex;gap:8px;">
+        <input class="inp" id="s-proxy" style="width:280px;font-family:var(--mono);font-size:12px;" placeholder="https://oslo-bors-proxy.boetor.workers.dev"/>
+        <button class="btn btn-sm" onclick="saveSetting('proxy_url','s-proxy','Proxy URL lagret ✓')">Lagre</button>
+      </div>
+    </div>
+    <div class="sett-row">
+      <div><div class="sett-lbl">Anthropic API-nøkkel</div><div class="sett-desc">For nyhetsanalyse – hent på console.anthropic.com</div></div>
+      <div style="display:flex;gap:8px;">
+        <input class="inp" id="s-anth" type="password" style="width:280px;font-family:var(--mono);font-size:12px;" placeholder="sk-ant-..."/>
+        <button class="btn btn-sm" onclick="saveSetting('anth_key','s-anth','API-nøkkel lagret ✓')">Lagre</button>
+      </div>
+    </div>
+    <div class="sett-row">
+      <div><div class="sett-lbl">USD/NOK</div><div class="sett-desc">Valutakurs for omregning</div></div>
+      <div style="display:flex;gap:8px;">
+        <input class="inp" id="s-usd" type="number" style="width:90px;padding:7px 10px;" step="0.01"/>
+        <button class="btn btn-sm" onclick="saveRates()">Lagre</button>
+      </div>
+    </div>
+    <div class="sett-row">
+      <div><div class="sett-lbl">Nullstill portefølje</div><div class="sett-desc">Sletter alle posisjoner – kan ikke angres</div></div>
+      <button class="btn btn-sm" style="color:var(--red);border-color:rgba(255,77,106,.3);" onclick="resetPortfolio()">Nullstill</button>
+    </div>
+    <div class="msg grn" id="s-msg" style="margin-top:12px;"></div>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<script>
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+var holdings = [];
+var PROXY    = localStorage.getItem('proxy_url') || 'https://oslo-bors-proxy.boetor.workers.dev';
+var USD_NOK  = parseFloat(localStorage.getItem('usd_nok') || '10.5');
+var qCache   = {};
+var expanded = {};
+
+// ═══════════════════════════════════════════════
+// PERSISTENCE
+// ═══════════════════════════════════════════════
+function load() {
+  try { holdings = JSON.parse(localStorage.getItem('pf') || '[]'); } catch(e) { holdings = []; }
+}
+function save() {
+  localStorage.setItem('pf', JSON.stringify(holdings));
+}
+
+// ═══════════════════════════════════════════════
+// FORMAT
+// ═══════════════════════════════════════════════
+function f2(n, d) {
+  if (n == null || isNaN(n)) return '—';
+  d = d != null ? d : 2;
+  return new Intl.NumberFormat('nb-NO', {minimumFractionDigits:d, maximumFractionDigits:d}).format(n);
+}
+function fNok(n) {
+  if (n == null || isNaN(n)) return '—';
+  return new Intl.NumberFormat('nb-NO', {style:'currency', currency:'NOK', maximumFractionDigits:0}).format(n);
+}
+
+// ═══════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════
+function showTab(name) {
+  var tabs = ['holdings','news','import','manuell','settings'];
+  for (var i = 0; i < tabs.length; i++) {
+    var v = document.getElementById('view-' + tabs[i]);
+    var t = document.getElementById('tab-' + tabs[i]);
+    if (v) v.style.display = tabs[i] === name ? '' : 'none';
+    if (t) {
+      if (tabs[i] === name) t.classList.add('active');
+      else t.classList.remove('active');
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+// NAME NORMALIZATION
+// ═══════════════════════════════════════════════
+function norm(s) {
+  return s.replace(/\s+(ASA|AS|A\/S|Ltd|Limited|PLC|Plc|Inc|Corp|AB|SE|NV|SA)\.?\s*$/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+function dispName(s) {
+  var n = s.replace(/\s+(ASA|AS|A\/S|Ltd|Limited|PLC|Plc|Inc|Corp|AB|SE|NV|SA)\.?\s*$/i, '').trim();
+  return n.charAt(0).toUpperCase() + n.slice(1);
+}
+
+// ═══════════════════════════════════════════════
+// SYMBOL MAP
+// ═══════════════════════════════════════════════
+var SYM = {
+  'frontline':'FRO.OL','hafnia':'HAFNI.OL','wallenius wilhelmsen':'WAWI.OL',
+  'polight':'PLT.OL','aker':'AKER.OL','idex biometrics':'IDEX.OL',
+  'aker horizons':'AKH.OL','reach subsea':'REACH.OL',
+  'solstad offshore':'SOFF.OL','solstad maritime':'SOFF.OL',
+  'salmon evolution':'SALME.OL','next biometrics group':'NEXT.OL',
+  'next biometrics':'NEXT.OL','hunter group':'HUNT.OL',
+  'norwegian air shuttle':'NAS.OL','ensurge micropower':'ENSU.OL',
+  '5th planet games':'5PG.OL',
+  'public property invest':'PUBLI.OL',
+  'equinor':'EQNR.OL','dnb':'DNB.OL','dnb bank':'DNB.OL',
+  'mowi':'MOWI.OL','yara':'YAR.OL','yara international':'YAR.OL',
+  'telenor':'TEL.OL','salmar':'SALM.OL','norsk hydro':'NHY.OL',
+  'aker bp':'AKRBP.OL','subsea 7':'SUBC.OL','orkla':'ORK.OL',
+  'schibsted':'SCHA.OL','nel':'NEL.OL','rec silicon':'RECSI.OL',
+  'golden ocean':'GOGL.OL','nordic semiconductor':'NOD.OL',
+  'tomra':'TOM.OL','kongsberg gruppen':'KOG.OL','gjensidige':'GJF.OL',
+  'storebrand':'STB.OL','bakkafrost':'BAKKA.OL',
+  'leroy seafood':'LSG.OL','grieg seafood':'GSF.OL',
+  'aker solutions':'AKSO.OL','bouvet':'BOUV.OL',
+  'sparebank 1 sr-bank':'SRBANK.OL',
+  'apple':'AAPL','microsoft':'MSFT','tesla':'TSLA',
+  'nvidia':'NVDA','amazon':'AMZN','alphabet':'GOOGL','meta':'META'
+};
+
+function getSym(navn) {
+  var key = norm(navn);
+  if (SYM[key]) return SYM[key];
+  var keys = Object.keys(SYM);
+  for (var i = 0; i < keys.length; i++) {
+    if (key.indexOf(keys[i]) >= 0 || keys[i].indexOf(key) >= 0) return SYM[keys[i]];
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════
+// QUOTE FETCHING
+// ═══════════════════════════════════════════════
+function fetchQuote(sym, cb) {
+  if (qCache[sym] && (Date.now() - qCache[sym].ts < 5*60*1000)) { cb(qCache[sym]); return; }
+  var ctrl = new AbortController();
+  var timer = setTimeout(function() { ctrl.abort(); }, 7000);
+  fetch(PROXY + '?symbol=' + encodeURIComponent(sym), {signal: ctrl.signal})
+    .then(function(r) { clearTimeout(timer); return r.json(); })
+    .then(function(d) {
+      if (d && d.price) {
+        var chg = d.previousClose ? (d.price - d.previousClose) / d.previousClose * 100 : 0;
+        var result = {price: d.price, change: chg, currency: d.currency || 'NOK', ts: Date.now()};
+        qCache[sym] = result;
+        cb(result);
+      } else { cb(null); }
+    })
+    .catch(function() { cb(null); });
+}
+
+function refreshAllQuotes() {
+  var btn = document.getElementById('btn-refresh');
+  if (btn) { btn.innerHTML = '<span class="spinner"></span> Henter…'; btn.disabled = true; }
+  var names = [];
+  var seen = {};
+  for (var i = 0; i < holdings.length; i++) {
+    var k = norm(holdings[i].navn);
+    if (!seen[k]) { seen[k] = true; names.push(holdings[i].navn); }
+  }
+  var done = 0;
+  var updated = 0;
+  var notFound = [];
+  if (names.length === 0) { resetRefreshBtn(); return; }
+  for (var ni = 0; ni < names.length; ni++) {
+    (function(navn) {
+      var sym = getSym(navn);
+      if (!sym) {
+        notFound.push(norm(navn));
+        done++;
+        if (done === names.length) finishRefresh(updated, notFound);
+        return;
+      }
+      fetchQuote(sym, function(q) {
+        if (q) {
+          updated++;
+          for (var j = 0; j < holdings.length; j++) {
+            if (norm(holdings[j].navn) === norm(navn)) {
+              holdings[j].kurs = q.price;
+              holdings[j].mv = q.price * holdings[j].antall;
+              holdings[j].dagPct = parseFloat(q.change.toFixed(4));
+              if (holdings[j].kostpris) holdings[j].gevinst = holdings[j].mv - holdings[j].kostpris;
+              holdings[j].live = true;
+            }
+          }
+        } else { notFound.push(sym); }
+        done++;
+        if (done === names.length) finishRefresh(updated, notFound);
+      });
+    })(names[ni]);
+  }
+}
+
+function finishRefresh(updated, notFound) {
+  save();
+  renderHoldings();
+  updateMetrics();
+  var now = new Date().toLocaleTimeString('nb-NO');
+  var msg = 'Kurser: ' + now + ' · ' + updated + ' oppdatert';
+  if (notFound.length) msg += ' · Ingen symbol: ' + notFound.slice(0,3).join(', ');
+  document.getElementById('sub-line').textContent = msg;
+  resetRefreshBtn();
+}
+
+function resetRefreshBtn() {
+  var btn = document.getElementById('btn-refresh');
+  if (btn) { btn.innerHTML = '↻ Oppdater kurser'; btn.disabled = false; }
+}
+
+// ═══════════════════════════════════════════════
+// CSV PARSING
+// ═══════════════════════════════════════════════
+function cleanStr(s) {
+  return (s || '').replace(/^["'\s]+|["'\s]+$/g, '').trim();
+}
+function parseNum(s) {
+  if (!s) return 0;
+  var r = parseFloat(String(s).replace(/\u00a0/g,'').replace(/\s/g,'').replace(/\./g,'').replace(',','.').replace(/[^\d.\-]/g,''));
+  return isNaN(r) ? 0 : r;
+}
+
+function detectAndParse(text, filename) {
+  // Detect encoding artifacts
+  text = text.replace(/\uFEFF/g, '').replace(/\u0000/g, '');
+  var lines = text.trim().split(/\r?\n/).filter(function(l) { return l.trim(); });
+  if (lines.length < 2) return [];
+
+  // Detect separator
+  var sep = lines[0].indexOf('\t') >= 0 ? '\t' : (lines[0].split(';').length > lines[0].split(',').length ? ';' : ',');
+
+  function splitLine(line) {
+    if (sep === '\t') return line.split('\t').map(cleanStr);
+    var res = [], cur = '', inQ = false;
+    for (var i = 0; i < line.length; i++) {
+      var c = line[i];
+      if (c === '"') { inQ = !inQ; }
+      else if (c === sep && !inQ) { res.push(cleanStr(cur)); cur = ''; }
+      else { cur += c; }
+    }
+    res.push(cleanStr(cur));
+    return res;
+  }
+
+  // Find header row
+  var headerIdx = 0;
+  var headerKws = ['navn','verdipapir','fond','name','selskap'];
+  for (var i = 0; i < Math.min(5, lines.length); i++) {
+    var first = splitLine(lines[i])[0].toLowerCase().replace(/[^a-zæøå]/g,'');
+    for (var k = 0; k < headerKws.length; k++) {
+      if (first.indexOf(headerKws[k]) >= 0) { headerIdx = i; break; }
+    }
+  }
+
+  var headers = splitLine(lines[headerIdx]).map(function(h) {
+    return h.replace(/\u00a0/g,' ').toLowerCase().trim();
+  });
+  var rows = [];
+  for (var i = headerIdx + 1; i < lines.length; i++) {
+    rows.push(splitLine(lines[i]));
+  }
+
+  // Detect broker type
+  var hStr = headers.join('|');
+  var broker = 'ukjent';
+  if (hStr.indexOf('belåningsverdi') >= 0 || (hStr.indexOf('siste kurs') >= 0 && hStr.indexOf('gav') >= 0)) broker = 'nordnet';
+  else if (hStr.indexOf('kostpris per aksje') >= 0 || hStr.indexOf('urealisert') >= 0 && hStr.indexOf('børs') >= 0) broker = 'dnbrapport';
+  else if (hStr.indexOf('isin') >= 0 && hStr.indexOf('anskaffelseskurs') >= 0) broker = 'sparebank1';
+  else if (hStr.indexOf('nav') >= 0 || hStr.indexOf('andeler') >= 0) broker = 'skagen';
+
+  function col(names) {
+    for (var n = 0; n < names.length; n++) {
+      // Exact match first
+      for (var j = 0; j < headers.length; j++) { if (headers[j] === names[n]) return j; }
+      // Partial match
+      for (var j = 0; j < headers.length; j++) { if (headers[j].indexOf(names[n]) >= 0) return j; }
+    }
+    return -1;
+  }
+
+  var result = [];
+
+  if (broker === 'nordnet') {
+    var iN=col(['navn']), iA=col(['antall']), iK=col(['siste kurs']), iV=col(['verdi nok']), iG=col(['gav']), iD=col(['i dag %']), iAv=col(['avkast']);
+    // verdi nok must be exact - not just 'verdi'
+    var iVExact = -1;
+    for (var j = 0; j < headers.length; j++) { if (headers[j] === 'verdi nok') { iVExact = j; break; } }
+    if (iVExact >= 0) iV = iVExact;
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r[iN]) continue;
+      var ant = parseNum(r[iA]);
+      if (!ant) continue;
+      var kurs = parseNum(r[iK >= 0 ? iK : 5]);
+      var mv = iV >= 0 ? parseNum(r[iV]) : kurs * ant;
+      var gav = iG >= 0 ? parseNum(r[iG]) : 0;
+      var gevinst = iAv >= 0 ? parseNum(r[iAv]) : null;
+      result.push({
+        navn: cleanStr(r[iN]), antall: ant, kurs: kurs, mv: mv,
+        kostpris: gav > 0 ? gav * ant : null,
+        gevinst: gevinst, dagPct: iD >= 0 ? parseNum(r[iD]) : null,
+        kilde: 'nordnet'
+      });
+    }
+  } else if (broker === 'dnbrapport') {
+    var iN=col(['navn']), iK=col(['siste kurs']), iA=col(['antall']), iV=col(['verdi']);
+    var iU = -1; // Urealisert (not %)
+    for (var j = 0; j < headers.length; j++) { if (headers[j] === 'urealisert') { iU = j; break; } }
+    var iGAV = col(['kostpris per aksje']), iD = col(['endring %']);
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r[iN]) continue;
+      var ant = parseNum(r[iA >= 0 ? iA : 2]);
+      if (!ant) continue;
+      var kurs = parseNum(r[iK >= 0 ? iK : 1]);
+      var mv = iV >= 0 ? parseNum(r[iV]) : kurs * ant;
+      var gavPer = iGAV >= 0 ? parseNum(r[iGAV]) : 0;
+      result.push({
+        navn: cleanStr(r[iN]), antall: ant, kurs: kurs, mv: mv,
+        kostpris: gavPer > 0 ? gavPer * ant : null,
+        gevinst: iU >= 0 ? parseNum(r[iU]) : null,
+        dagPct: iD >= 0 ? parseNum(r[iD]) : null,
+        kilde: 'dnbrapport'
+      });
+    }
+  } else if (broker === 'sparebank1') {
+    var iN=col(['verdipapir','navn']), iA=col(['antall']), iK=col(['kurs']), iV=col(['verdi']), iKP=col(['anskaffelsesverdi','kostpris']), iG=col(['gevinst','urealisert']);
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r[iN]) continue;
+      var ant = parseNum(r[iA]);
+      if (!ant) continue;
+      var kurs = parseNum(r[iK >= 0 ? iK : 2]);
+      result.push({
+        navn: cleanStr(r[iN]), antall: ant, kurs: kurs,
+        mv: iV >= 0 ? parseNum(r[iV]) : kurs * ant,
+        kostpris: iKP >= 0 ? parseNum(r[iKP]) : null,
+        gevinst: iG >= 0 ? parseNum(r[iG]) : null,
+        dagPct: null, kilde: 'sparebank1'
+      });
+    }
+  } else {
+    // Generic
+    var iN=col(['navn','name']), iA=col(['antall','antal']), iK=col(['kurs','pris']), iV=col(['verdi','value']);
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (iN < 0 || !r[iN]) continue;
+      var ant = parseNum(r[iA >= 0 ? iA : 1]);
+      if (!ant) continue;
+      var kurs = parseNum(r[iK >= 0 ? iK : 2]);
+      result.push({
+        navn: cleanStr(r[iN]), antall: ant, kurs: kurs,
+        mv: iV >= 0 ? parseNum(r[iV]) : kurs * ant,
+        kostpris: null, gevinst: null, dagPct: null, kilde: 'ukjent'
+      });
+    }
+  }
+
+  return result;
+}
+
+// ═══════════════════════════════════════════════
+// FILE IMPORT
+// ═══════════════════════════════════════════════
+function onFileSelect(evt) {
+  var files = evt.target.files;
+  for (var i = 0; i < files.length; i++) {
+    (function(file) { processFile(file); })(files[i]);
+  }
+}
+
+function processFile(file) {
+  var log = document.getElementById('imp-log');
+  log.innerHTML = '<div class="loading"><span class="spinner"></span> Leser ' + file.name + '…</div>';
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var text = e.target.result;
+    text = text.replace(/\uFEFF/g,'').replace(/\u0000/g,'');
+    var parsed = detectAndParse(text, file.name);
+
+    if (!parsed.length) {
+      log.innerHTML = '<div style="color:var(--red);padding:10px;">Fant ingen posisjoner i ' + file.name + '. Sjekk at filen er CSV-format.</div>';
+      return;
+    }
+
+    // Merge: replace same navn+kilde+antall, otherwise add
+    var added = 0, replaced = 0;
+    for (var i = 0; i < parsed.length; i++) {
+      var p = parsed[i];
+      var found = false;
+      for (var j = 0; j < holdings.length; j++) {
+        if (norm(holdings[j].navn) === norm(p.navn) && holdings[j].kilde === p.kilde && holdings[j].antall === p.antall) {
+          holdings[j] = p; replaced++; found = true; break;
+        }
+      }
+      if (!found) { holdings.push(p); added++; }
+    }
+
+    save();
+    renderHoldings();
+    updateMetrics();
+
+    var brokerLabel = {nordnet:'Nordnet',dnbrapport:'DNB',sparebank1:'Sparebank 1',skagen:'Skagen',ukjent:'Ukjent'}[parsed[0].kilde] || parsed[0].kilde;
+    log.innerHTML = '<div class="imp-result">'
+      + '<div class="imp-row"><span>Megler</span><span style="color:var(--grn);">' + brokerLabel + '</span></div>'
+      + '<div class="imp-row"><span>Nye posisjoner</span><span style="color:var(--grn);">+' + added + '</span></div>'
+      + (replaced ? '<div class="imp-row"><span>Oppdatert</span><span>' + replaced + '</span></div>' : '')
+      + '<div class="imp-row"><span>Totalt i appen</span><span>' + holdings.length + '</span></div>'
+      + '</div>';
+
+    document.getElementById('sub-line').textContent = 'Importert: ' + new Date().toLocaleString('nb-NO');
+
+    // Auto-refresh quotes
+    if (PROXY) setTimeout(refreshAllQuotes, 500);
+  };
+
+  // Try UTF-16 first (Nordnet), fallback to UTF-8
+  var ab = new FileReader();
+  ab.onload = function(e) {
+    var bytes = new Uint8Array(e.target.result);
+    var text;
+    if (bytes[0] === 0xFF && bytes[1] === 0xFE) {
+      text = new TextDecoder('utf-16le').decode(e.target.result);
+    } else if (bytes[0] === 0xFE && bytes[1] === 0xFF) {
+      text = new TextDecoder('utf-16be').decode(e.target.result);
+    } else {
+      text = new TextDecoder('utf-8').decode(e.target.result);
+    }
+    text = text.replace(/\uFEFF/g,'').replace(/\u0000/g,'');
+    var parsed = detectAndParse(text, file.name);
+
+    if (!parsed.length) {
+      document.getElementById('imp-log').innerHTML = '<div style="color:var(--red);padding:10px;">Fant ingen posisjoner i ' + file.name + '.</div>';
+      return;
+    }
+
+    var added = 0, replaced = 0;
+    for (var i = 0; i < parsed.length; i++) {
+      var p = parsed[i];
+      var found = false;
+      for (var j = 0; j < holdings.length; j++) {
+        if (norm(holdings[j].navn) === norm(p.navn) && holdings[j].kilde === p.kilde && holdings[j].antall === p.antall) {
+          holdings[j] = p; replaced++; found = true; break;
+        }
+      }
+      if (!found) { holdings.push(p); added++; }
+    }
+
+    save(); renderHoldings(); updateMetrics();
+
+    var brokerLabel = {nordnet:'Nordnet',dnbrapport:'DNB',sparebank1:'Sparebank 1',skagen:'Skagen',ukjent:'Ukjent'}[parsed[0].kilde] || parsed[0].kilde;
+    document.getElementById('imp-log').innerHTML = '<div class="imp-result">'
+      + '<div class="imp-row"><span>Megler</span><span style="color:var(--grn);">' + brokerLabel + '</span></div>'
+      + '<div class="imp-row"><span>Nye posisjoner</span><span style="color:var(--grn);">+' + added + '</span></div>'
+      + (replaced ? '<div class="imp-row"><span>Oppdatert</span><span>' + replaced + '</span></div>' : '')
+      + '<div class="imp-row"><span>Totalt</span><span>' + holdings.length + '</span></div>'
+      + '</div>';
+    document.getElementById('sub-line').textContent = 'Importert: ' + new Date().toLocaleString('nb-NO');
+    if (PROXY) setTimeout(refreshAllQuotes, 500);
+  };
+  ab.readAsArrayBuffer(file);
+}
+
+// Drag and drop
+var dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', function(e) { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', function() { dz.classList.remove('over'); });
+dz.addEventListener('drop', function(e) {
+  e.preventDefault(); dz.classList.remove('over');
+  var files = e.dataTransfer.files;
+  for (var i = 0; i < files.length; i++) { processFile(files[i]); }
+});
+
+// ═══════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════
+function renderHoldings() {
+  document.getElementById('m-pos').textContent = holdings.length;
+  var body = document.getElementById('tbl-body');
+  if (!holdings.length) {
+    body.innerHTML = '<tr><td colspan="8"><div class="empty">Ingen posisjoner – importer CSV eller legg til manuelt</div></td></tr>';
+    document.getElementById('src-summary').innerHTML = '';
+    return;
+  }
+
+  // Group by normalized name
+  var groups = {};
+  var order = [];
+  for (var i = 0; i < holdings.length; i++) {
+    var k = norm(holdings[i].navn);
+    if (!groups[k]) { groups[k] = []; order.push(k); }
+    groups[k].push({h: holdings[i], idx: i});
+  }
+
+  // Sort by total mv
+  order.sort(function(a, b) {
+    var va = groups[a].reduce(function(s,x) { return s + (x.h.mv||0); }, 0);
+    var vb = groups[b].reduce(function(s,x) { return s + (x.h.mv||0); }, 0);
+    return vb - va;
+  });
+
+  var html = '';
+  for (var gi = 0; gi < order.length; gi++) {
+    var key = order[gi];
+    var group = groups[key];
+    var totalMv = group.reduce(function(s,x) { return s + (x.h.mv||0); }, 0);
+    var totalAnt = group.reduce(function(s,x) { return s + (x.h.antall||0); }, 0);
+    var allHaveKost = group.every(function(x) { return x.h.kostpris != null; });
+    var totalKost = allHaveKost ? group.reduce(function(s,x) { return s + x.h.kostpris; }, 0) : null;
+    var allHaveGev = group.every(function(x) { return x.h.gevinst != null; });
+    var totalGev = allHaveGev ? group.reduce(function(s,x) { return s + x.h.gevinst; }, 0) : null;
+    var avgKurs = totalAnt > 0 ? totalMv / totalAnt : null;
+
+    // Weighted avg GAV
+    var gavSum = 0, gavAnt = 0;
+    for (var xi = 0; xi < group.length; xi++) {
+      if (group[xi].h.kostpris && group[xi].h.antall) {
+        gavSum += (group[xi].h.kostpris / group[xi].h.antall) * group[xi].h.antall;
+        gavAnt += group[xi].h.antall;
+      }
+    }
+    var avgGav = gavAnt > 0 ? gavSum / gavAnt : null;
+
+    // Day change (average)
+    var dagVals = group.filter(function(x) { return x.h.dagPct != null; });
+    var avgDag = dagVals.length ? dagVals.reduce(function(s,x) { return s + x.h.dagPct; }, 0) / dagVals.length : null;
+
+    var gevTag = '—';
+    if (totalGev != null) {
+      var gevPct = totalKost ? totalGev / totalKost * 100 : null;
+      gevTag = '<span style="font-family:var(--mono);color:' + (totalGev>=0?'var(--grn)':'var(--red)') + ';">'
+        + (totalGev>=0?'+':'') + fNok(totalGev)
+        + (gevPct != null ? '<br><span style="font-size:11px;">' + (gevPct>=0?'+':'') + f2(gevPct) + '%</span>' : '')
+        + '</span>';
+    }
+
+    var dagTag = avgDag != null
+      ? '<span class="tag ' + (avgDag>=0?'t-grn':'t-red') + '">' + (avgDag>=0?'+':'') + f2(avgDag) + '%</span>'
+      : '—';
+
+    var multi = group.length > 1;
+    var isExp = expanded[key];
+
+    // Source badges
+    var srcHtml = '';
+    var srcSeen = {};
+    for (var xi = 0; xi < group.length; xi++) {
+      var kilde = group[xi].h.kilde;
+      if (!srcSeen[kilde]) {
+        srcSeen[kilde] = true;
+        var sc = {nordnet:'src-n',dnbrapport:'src-d',sparebank1:'src-s',skagen:'src-k',manuell:'src-m'}[kilde]||'src-m';
+        var sl = {nordnet:'Nordnet',dnbrapport:'DNB',sparebank1:'Sparebank 1',skagen:'Skagen',manuell:'Manuell',ukjent:'Ukjent'}[kilde]||kilde;
+        srcHtml += '<span class="src ' + sc + '">' + sl + '</span>';
+      }
+    }
+
+    var dispN = dispName(group[0].h.navn);
+    var expBtn = multi ? ' <span style="font-size:11px;color:var(--acc);cursor:pointer;" onclick="toggleGroup(\'' + key.replace(/'/g,"\\'") + '\')">' + (isExp?'▲':'▼') + ' ' + group.length + ' meglere</span>' : '';
+
+    html += '<tr style="cursor:' + (multi?'pointer':'default') + ';" onclick="' + (multi ? 'toggleGroup(\'' + key.replace(/'/g,"\\'") + '\')' : '') + '">'
+      + '<td><span style="font-weight:600;">' + dispN + '</span>' + expBtn + '</td>'
+      + '<td>' + srcHtml + '</td>'
+      + '<td style="font-family:var(--mono);">' + f2(avgKurs) + '<div style="font-size:11px;color:var(--t3);">' + (avgGav?'GAV: '+f2(avgGav):'') + '</div></td>'
+      + '<td class="tr" style="font-family:var(--mono);">' + f2(totalAnt,0) + '</td>'
+      + '<td class="tr" style="font-family:var(--mono);font-weight:500;">' + fNok(totalMv) + '</td>'
+      + '<td class="tc">' + dagTag + '</td>'
+      + '<td class="tr">' + gevTag + '</td>'
+      + '<td><button class="btn btn-del" onclick="event.stopPropagation();removeGroup(\'' + key.replace(/'/g,"\\'") + '\')" title="Fjern">✕</button></td>'
+      + '</tr>';
+
+    // Expanded detail rows
+    if (isExp) {
+      for (var xi = 0; xi < group.length; xi++) {
+        var h = group[xi].h;
+        var origIdx = group[xi].idx;
+        var sc2 = {nordnet:'src-n',dnbrapport:'src-d',sparebank1:'src-s',skagen:'src-k',manuell:'src-m'}[h.kilde]||'src-m';
+        var sl2 = {nordnet:'Nordnet',dnbrapport:'DNB',sparebank1:'Sparebank 1',skagen:'Skagen',manuell:'Manuell',ukjent:'Ukjent'}[h.kilde]||h.kilde;
+        var hGav = h.kostpris && h.antall ? h.kostpris / h.antall : null;
+        var updown = '';
+        if (hGav && h.kurs) {
+          var pct = (h.kurs - hGav) / hGav * 100;
+          updown = '<div style="font-size:11px;color:' + (pct>=0?'var(--grn)':'var(--red)') + ';">' + (pct>=0?'▲':'▼') + ' ' + f2(Math.abs(pct)) + '% ift GAV</div>';
+        }
+        var hGev = h.gevinst != null
+          ? '<span style="font-family:var(--mono);font-size:13px;color:' + (h.gevinst>=0?'var(--grn)':'var(--red)') + ';">' + (h.gevinst>=0?'+':'') + fNok(h.gevinst) + '</span>'
+          : '—';
+        var hDag = h.dagPct != null
+          ? '<span class="tag ' + (h.dagPct>=0?'t-grn':'t-red') + '" style="font-size:11px;">' + (h.dagPct>=0?'+':'') + f2(h.dagPct) + '%</span>'
+          : '—';
+        html += '<tr style="background:rgba(77,124,254,.04);">'
+          + '<td style="padding-left:28px;border-left:3px solid var(--acc);">'
+          + '<span style="font-size:13px;color:var(--t2);">' + h.navn + '</span>' + updown
+          + '<div class="mobile-extra"><span class="src ' + sc2 + '">' + sl2 + '</span><span style="font-size:11px;color:var(--t3);font-family:var(--mono);margin-left:4px;">' + f2(h.kurs) + (hGav?' · GAV:'+f2(hGav):'') + '</span>' + hDag + '</div>'
+          + '</td>'
+          + '<td class="col-hide"><span class="src ' + sc2 + '">' + sl2 + '</span></td>'
+          + '<td class="col-hide" style="font-family:var(--mono);font-size:13px;">' + f2(h.kurs) + (hGav ? '<div style="font-size:11px;color:var(--t3);">GAV: '+f2(hGav)+'</div>' : '') + '</td>'
+          + '<td class="tr col-hide" style="font-family:var(--mono);font-size:13px;">' + f2(h.antall,0) + '</td>'
+          + '<td class="tr" style="font-family:var(--mono);font-size:13px;">' + fNok(h.mv) + '</td>'
+          + '<td class="tc col-hide">' + hDag + '</td>'
+          + '<td class="tr">' + hGev + '</td>'
+          + '<td><button class="btn btn-del" style="font-size:11px;padding:4px 7px;" onclick="removeOne(' + origIdx + ')">✕</button></td>'
+          + '</tr>';
+      }
+    }
+  }
+
+  body.innerHTML = html;
+
+  // Source summary
+  var sources = {};
+  for (var i = 0; i < holdings.length; i++) {
+    var k = holdings[i].kilde;
+    if (!sources[k]) sources[k] = {cnt:0, val:0};
+    sources[k].cnt++;
+    sources[k].val += holdings[i].mv || 0;
+  }
+  var srcKeys = Object.keys(sources);
+  var sumHtml = '';
+  for (var i = 0; i < srcKeys.length; i++) {
+    var k = srcKeys[i];
+    var sc = {nordnet:'src-n',dnbrapport:'src-d',sparebank1:'src-s',skagen:'src-k',manuell:'src-m'}[k]||'src-m';
+    var sl = {nordnet:'Nordnet',dnbrapport:'DNB',sparebank1:'Sparebank 1',skagen:'Skagen',manuell:'Manuell',ukjent:'Ukjent'}[k]||k;
+    sumHtml += '<span style="margin-right:16px;"><span class="src ' + sc + '">' + sl + '</span> ' + sources[k].cnt + ' pos · ' + fNok(sources[k].val) + '</span>';
+  }
+  document.getElementById('src-summary').innerHTML = sumHtml;
+  document.getElementById('m-src').textContent = 'fra ' + srcKeys.length + ' megler' + (srcKeys.length===1?'':'e');
+
+  // ---- MOBILE CARD LAYOUT ----
+  var cardList = document.getElementById('card-list');
+  if (!cardList) return;
+  if (!holdings.length) {
+    cardList.innerHTML = '<div class="empty" style="padding:32px;">Ingen posisjoner</div>';
+    return;
+  }
+  var cardHtml = '';
+  for (var gi = 0; gi < order.length; gi++) {
+    var key = order[gi];
+    var group = groups[key];
+    var totalMv2 = group.reduce(function(s,x){return s+(x.h.mv||0);},0);
+    var totalAnt2 = group.reduce(function(s,x){return s+(x.h.antall||0);},0);
+    var allHaveGev2 = group.every(function(x){return x.h.gevinst!=null;});
+    var totalGev2 = allHaveGev2 ? group.reduce(function(s,x){return s+x.h.gevinst;},0) : null;
+    var allHaveKost2 = group.every(function(x){return x.h.kostpris!=null;});
+    var totalKost2 = allHaveKost2 ? group.reduce(function(s,x){return s+x.h.kostpris;},0) : null;
+    var avgKurs2 = totalAnt2>0 ? totalMv2/totalAnt2 : null;
+    var dagVals2 = group.filter(function(x){return x.h.dagPct!=null;});
+    var avgDag2 = dagVals2.length ? dagVals2.reduce(function(s,x){return s+x.h.dagPct;},0)/dagVals2.length : null;
+    var gavSum2=0, gavAnt2=0;
+    for(var xi=0;xi<group.length;xi++){
+      if(group[xi].h.kostpris&&group[xi].h.antall){gavSum2+=(group[xi].h.kostpris/group[xi].h.antall)*group[xi].h.antall;gavAnt2+=group[xi].h.antall;}
+    }
+    var avgGav2 = gavAnt2>0 ? gavSum2/gavAnt2 : null;
+    var dispN2 = dispName(group[0].h.navn);
+    var multi2 = group.length > 1;
+    var isExp2 = expanded[key];
+    var gevColor = totalGev2!=null ? (totalGev2>=0?'var(--grn)':'var(--red)') : 'var(--t1)';
+    var gevStr = totalGev2!=null ? (totalGev2>=0?'+':'')+fNok(totalGev2) : '—';
+    var gevPctStr = totalGev2!=null && totalKost2 ? ' <span style="font-size:11px;">('+(totalGev2>=0?'+':'')+f2(totalGev2/totalKost2*100)+'%)</span>' : '';
+    var dagStr = avgDag2!=null ? '<span class="tag '+(avgDag2>=0?'t-grn':'t-red')+'" style="font-size:11px;">'+(avgDag2>=0?'+':'')+f2(avgDag2)+'%</span>' : '';
+    var srcStr = '';
+    var srcSeen2={};
+    for(var xi=0;xi<group.length;xi++){
+      var kd=group[xi].h.kilde;
+      if(!srcSeen2[kd]){srcSeen2[kd]=true;var sc3={nordnet:'src-n',dnbrapport:'src-d',sparebank1:'src-s',skagen:'src-k',manuell:'src-m'}[kd]||'src-m';var sl3={nordnet:'Nordnet',dnbrapport:'DNB',sparebank1:'Sparebank 1',skagen:'Skagen',manuell:'Manuell',ukjent:'Ukjent'}[kd]||kd;srcStr+='<span class="src '+sc3+'">'+sl3+'</span>';}
+    }
+    var metaStr = srcStr + (avgKurs2?' <span style="color:var(--t3);">'+f2(avgKurs2)+' NOK</span>':'') + (avgGav2?' <span style="color:var(--t3);">· GAV:'+f2(avgGav2)+'</span>':'');
+    var expArrow = multi2 ? ' <span style="color:var(--acc);font-size:11px;">'+(isExp2?'▲':'▼')+' '+group.length+'</span>' : '';
+    cardHtml += '<div class="pos-card" onclick="toggleCardGroup(''+key.replace(/'/g,"\'")+'')">'
+      + '<div class="pos-card-top">'
+      + '<div><div class="pos-card-name">'+dispN2+expArrow+'</div><div class="pos-card-meta">'+metaStr+'</div></div>'
+      + '<div class="pos-card-right">'
+      + '<div class="pos-card-val">'+fNok(totalMv2)+'</div>'
+      + '<div class="pos-card-gev" style="color:'+gevColor+';">'+gevStr+gevPctStr+'</div>'
+      + '</div></div>'
+      + '<div class="pos-card-bot"><div>'+dagStr+'</div>'
+      + '<button class="btn btn-del" style="padding:6px 10px;" onclick="event.stopPropagation();removeGroup(''+key.replace(/'/g,"\'")+'')">✕</button>'
+      + '</div>';
+
+    // Sub-cards for expanded groups
+    if (isExp2) {
+      for(var xi=0;xi<group.length;xi++){
+        var h2=group[xi].h; var origIdx2=group[xi].idx;
+        var sc4={nordnet:'src-n',dnbrapport:'src-d',sparebank1:'src-s',skagen:'src-k',manuell:'src-m'}[h2.kilde]||'src-m';
+        var sl4={nordnet:'Nordnet',dnbrapport:'DNB',sparebank1:'Sparebank 1',skagen:'Skagen',manuell:'Manuell',ukjent:'Ukjent'}[h2.kilde]||h2.kilde;
+        var hGav2=h2.kostpris&&h2.antall?h2.kostpris/h2.antall:null;
+        var upPct=hGav2&&h2.kurs?(h2.kurs-hGav2)/hGav2*100:null;
+        cardHtml += '<div class="pos-sub-card open">'
+          + '<div class="sub-row"><span>Megler</span><span><span class="src '+sc4+'">'+sl4+'</span></span></div>'
+          + '<div class="sub-row"><span>Antall</span><span>'+f2(h2.antall,0)+'</span></div>'
+          + '<div class="sub-row"><span>Kurs</span><span>'+f2(h2.kurs)+' NOK</span></div>'
+          + (hGav2?'<div class="sub-row"><span>GAV</span><span>'+f2(hGav2)+' NOK'+(upPct!=null?' <span style="color:'+(upPct>=0?'var(--grn)':'var(--red)')+';">'+(upPct>=0?'▲':'▼')+f2(Math.abs(upPct))+'%</span>':'')+'</span></div>':'')
+          + '<div class="sub-row"><span>Verdi</span><span>'+fNok(h2.mv)+'</span></div>'
+          + (h2.gevinst!=null?'<div class="sub-row"><span>Gevinst/tap</span><span style="color:'+(h2.gevinst>=0?'var(--grn)':'var(--red)')+';">'+(h2.gevinst>=0?'+':'')+fNok(h2.gevinst)+'</span></div>':'')
+          + '<div style="text-align:right;margin-top:6px;"><button class="btn btn-del btn-sm" onclick="event.stopPropagation();removeOne('+origIdx2+')">Fjern denne</button></div>'
+          + '</div>';
+      }
+    }
+    cardHtml += '</div>';
+  }
+  cardList.innerHTML = cardHtml;
+}
+
+function toggleCardGroup(key) {
+  expanded[key] = !expanded[key];
+  renderHoldings();
+}
 function toggleGroup(key) {
   expanded[key] = !expanded[key];
   renderHoldings();
