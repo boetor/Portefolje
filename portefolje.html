@@ -55,6 +55,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--sans);font-size:15px
 /* TABS */
 .tabs{display:flex;gap:2px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);padding:3px;margin-bottom:20px;width:fit-content;flex-wrap:wrap;}
 .tab{padding:7px 16px;border-radius:6px;font-size:13px;font-weight:500;color:var(--t2);cursor:pointer;transition:all .15s;border:none;background:transparent;font-family:var(--sans);}
+.tab-short{display:none;}
 .tab:hover{color:var(--t1);}
 .tab.active{background:var(--s2);color:var(--t1);border:1px solid var(--b2);}
 
@@ -161,6 +162,8 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
   .m-val { font-size:18px; }
   .tabs { width:100%; }
   .tab { flex:1; text-align:center; padding:7px 3px; font-size:11px; }
+  .tab-full { display:none; }
+  .tab-short { display:inline; }
   .hdr-btns { width:100%; }
   .hdr-btns .btn { flex:1; justify-content:center; }
 }
@@ -194,11 +197,11 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
 </div>
 
 <div class="tabs">
-  <button class="tab active" id="tab-holdings" onclick="showTab('holdings')">Beholdning</button>
-  <button class="tab" id="tab-news" onclick="showTab('news')">Nyheter & analyse</button>
-  <button class="tab" id="tab-import" onclick="showTab('import')">↑ Importer CSV</button>
-  <button class="tab" id="tab-manuell" onclick="showTab('manuell')">+ Manuell</button>
-  <button class="tab" id="tab-settings" onclick="showTab('settings')">⚙ Innstillinger</button>
+  <button class="tab active" id="tab-holdings" onclick="showTab('holdings')"><span class="tab-full">Beholdning</span><span class="tab-short">📊</span></button>
+  <button class="tab" id="tab-news" onclick="showTab('news')"><span class="tab-full">Nyheter & analyse</span><span class="tab-short">📰</span></button>
+  <button class="tab" id="tab-import" onclick="showTab('import')"><span class="tab-full">↑ Importer CSV</span><span class="tab-short">↑ CSV</span></button>
+  <button class="tab" id="tab-manuell" onclick="showTab('manuell')"><span class="tab-full">+ Manuell</span><span class="tab-short">+</span></button>
+  <button class="tab" id="tab-settings" onclick="showTab('settings')"><span class="tab-full">⚙ Innstillinger</span><span class="tab-short">⚙</span></button>
 </div>
 
 <!-- BEHOLDNING -->
@@ -955,7 +958,7 @@ function renderHoldings() {
         '</div>'+
       '</div>'+
       '<div class="pos-card-bot"><div>'+dagTag+'</div>'+
-      '<button class="btn btn-del" style="padding:6px 10px;" onclick="event.stopPropagation();removeGroup(\''+safeKey+'\')">✕</button>'+
+      '<button class="btn btn-del" style="padding:4px 8px;font-size:11px;opacity:0.5;" onclick="event.stopPropagation();removeGroup(\''+safeKey+'\')">✕</button>'+
       '</div>';
 
     if (isExp) {
@@ -1173,6 +1176,8 @@ if (holdings.length > 0 && PROXY) setTimeout(refreshAllQuotes, 800);
   .m-val { font-size:18px; }
   .tabs { width:100%; }
   .tab { flex:1; text-align:center; padding:7px 3px; font-size:11px; }
+  .tab-full { display:none; }
+  .tab-short { display:inline; }
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--t1);font-family:var(--sans);font-size:15px;min-height:100vh;}
@@ -1207,6 +1212,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--sans);font-size:15px
 /* TABS */
 .tabs{display:flex;gap:2px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);padding:3px;margin-bottom:20px;width:fit-content;flex-wrap:wrap;}
 .tab{padding:7px 16px;border-radius:6px;font-size:13px;font-weight:500;color:var(--t2);cursor:pointer;transition:all .15s;border:none;background:transparent;font-family:var(--sans);}
+.tab-short{display:none;}
 .tab:hover{color:var(--t1);}
 .tab.active{background:var(--s2);color:var(--t1);border:1px solid var(--b2);}
 
@@ -1313,6 +1319,8 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
   .m-val { font-size:18px; }
   .tabs { width:100%; }
   .tab { flex:1; text-align:center; padding:7px 3px; font-size:11px; }
+  .tab-full { display:none; }
+  .tab-short { display:inline; }
   .hdr-btns { width:100%; }
   .hdr-btns .btn { flex:1; justify-content:center; }
 }
@@ -1346,11 +1354,11 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
 </div>
 
 <div class="tabs">
-  <button class="tab active" id="tab-holdings" onclick="showTab('holdings')">Beholdning</button>
-  <button class="tab" id="tab-news" onclick="showTab('news')">Nyheter & analyse</button>
-  <button class="tab" id="tab-import" onclick="showTab('import')">↑ Importer CSV</button>
-  <button class="tab" id="tab-manuell" onclick="showTab('manuell')">+ Manuell</button>
-  <button class="tab" id="tab-settings" onclick="showTab('settings')">⚙ Innstillinger</button>
+  <button class="tab active" id="tab-holdings" onclick="showTab('holdings')"><span class="tab-full">Beholdning</span><span class="tab-short">📊</span></button>
+  <button class="tab" id="tab-news" onclick="showTab('news')"><span class="tab-full">Nyheter & analyse</span><span class="tab-short">📰</span></button>
+  <button class="tab" id="tab-import" onclick="showTab('import')"><span class="tab-full">↑ Importer CSV</span><span class="tab-short">↑ CSV</span></button>
+  <button class="tab" id="tab-manuell" onclick="showTab('manuell')"><span class="tab-full">+ Manuell</span><span class="tab-short">+</span></button>
+  <button class="tab" id="tab-settings" onclick="showTab('settings')"><span class="tab-full">⚙ Innstillinger</span><span class="tab-short">⚙</span></button>
 </div>
 
 <!-- BEHOLDNING -->
