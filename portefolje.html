@@ -137,16 +137,18 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
 .sett-desc{font-size:12px;color:var(--t2);margin-top:2px;}
 .msg{font-size:12px;font-family:var(--mono);min-height:18px;}
 
-/* Skjul mobile-kurs på desktop */
-.mobile-kurs { display:none; }
+/* Mobile extras hidden on desktop */
+.mobile-extra { display:none; }
 @media(max-width:640px){
-  .col-kilde, .col-antall, .col-idag, .col-kurs { display:none; }
-  .mobile-kurs { display:block; }
+  .col-hide { display:none !important; }
+  .mobile-extra { display:block; margin-top:3px; }
   tbody td { padding:9px 10px; font-size:13px; }
   thead th { padding:8px 10px; }
   .btn-del { padding:8px 10px; }
   .hdr h1 { font-size:20px; }
   .m-val { font-size:18px; }
+  .tabs { width:100%; }
+  .tab { flex:1; text-align:center; padding:7px 4px; font-size:11px; }
 }
 @media(max-width:640px){
   .frow{grid-template-columns:1fr 1fr;}
@@ -191,11 +193,11 @@ tbody tr:hover{background:rgba(255,255,255,.02);}
     <table>
       <thead><tr>
         <th>Selskap</th>
-        <th class="col-kilde">Kilde</th>
-        <th class="col-kurs">Kurs (NOK)</th>
-        <th class="tr col-antall">Antall</th>
+        <th class="col-hide">Kilde</th>
+        <th class="col-hide">Kurs (NOK)</th>
+        <th class="tr col-hide">Antall</th>
         <th class="tr">Markedsverdi</th>
-        <th class="tc col-idag">I dag</th>
+        <th class="tc col-hide">I dag</th>
         <th class="tr">Gevinst/tap</th>
         <th></th>
       </tr></thead>
@@ -849,12 +851,15 @@ function renderHoldings() {
           ? '<span class="tag ' + (h.dagPct>=0?'t-grn':'t-red') + '" style="font-size:11px;">' + (h.dagPct>=0?'+':'') + f2(h.dagPct) + '%</span>'
           : '—';
         html += '<tr style="background:rgba(77,124,254,.04);">'
-          + '<td style="padding-left:28px;border-left:3px solid var(--acc);"><span style="font-size:13px;color:var(--t2);">' + h.navn + '</span>' + updown + '</td>'
-          + '<td><span class="src ' + sc2 + '">' + sl2 + '</span></td>'
-          + '<td style="font-family:var(--mono);font-size:13px;">' + f2(h.kurs) + (hGav ? '<div style="font-size:11px;color:var(--t3);">GAV: '+f2(hGav)+'</div>' : '') + '</td>'
-          + '<td class="tr" style="font-family:var(--mono);font-size:13px;">' + f2(h.antall,0) + '</td>'
+          + '<td style="padding-left:28px;border-left:3px solid var(--acc);">'
+          + '<span style="font-size:13px;color:var(--t2);">' + h.navn + '</span>' + updown
+          + '<div class="mobile-extra"><span class="src ' + sc2 + '">' + sl2 + '</span><span style="font-size:11px;color:var(--t3);font-family:var(--mono);margin-left:4px;">' + f2(h.kurs) + (hGav?' · GAV:'+f2(hGav):'') + '</span>' + hDag + '</div>'
+          + '</td>'
+          + '<td class="col-hide"><span class="src ' + sc2 + '">' + sl2 + '</span></td>'
+          + '<td class="col-hide" style="font-family:var(--mono);font-size:13px;">' + f2(h.kurs) + (hGav ? '<div style="font-size:11px;color:var(--t3);">GAV: '+f2(hGav)+'</div>' : '') + '</td>'
+          + '<td class="tr col-hide" style="font-family:var(--mono);font-size:13px;">' + f2(h.antall,0) + '</td>'
           + '<td class="tr" style="font-family:var(--mono);font-size:13px;">' + fNok(h.mv) + '</td>'
-          + '<td class="tc">' + hDag + '</td>'
+          + '<td class="tc col-hide">' + hDag + '</td>'
           + '<td class="tr">' + hGev + '</td>'
           + '<td><button class="btn btn-del" style="font-size:11px;padding:4px 7px;" onclick="removeOne(' + origIdx + ')">✕</button></td>'
           + '</tr>';
