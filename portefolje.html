@@ -345,7 +345,10 @@ async function refreshAllQuotes(){
   var btn=document.getElementById('btn-refresh');
   if(btn){btn.innerHTML='<span class="spinner"></span> Henter…';btn.disabled=true;}
   var names=[],seen={};
-  for(var i=0;i<holdings.length;i++){var k=norm(holdings[i].navn);if(!seen[k]){seen[k]=true;names.push(holdings[i].navn);}}
+  for(var i=0;i<holdings.length;i++){
+    var k=norm(holdings[i].navn);
+    if(!seen[k]){seen[k]=true;names.push(holdings[i].navn);}
+  }
   if(names.length===0){resetRefreshBtn();return;}
   var updated=0,notFound=[];
   for(var ni=0;ni<names.length;ni++){
