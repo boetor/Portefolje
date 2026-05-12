@@ -370,6 +370,7 @@ async function refreshAllQuotes(){
   }
   finishRefresh(updated,notFound);
 }
+
 function finishRefresh(updated,notFound){
   save();renderHoldings();updateMetrics();
   var now=new Date().toLocaleTimeString('nb-NO');
