@@ -341,36 +341,35 @@ function fetchQuote(sym,cb){
     .catch(function(){cb(null);});
 }
 
-function refreshAllQuotes(){
+async function refreshAllQuotes(){
   var btn=document.getElementById('btn-refresh');
   if(btn){btn.innerHTML='<span class="spinner"></span> Henter…';btn.disabled=true;}
   var names=[],seen={};
   for(var i=0;i<holdings.length;i++){var k=norm(holdings[i].navn);if(!seen[k]){seen[k]=true;names.push(holdings[i].navn);}}
-  var done=0,updated=0,notFound=[];
   if(names.length===0){resetRefreshBtn();return;}
+  var updated=0,notFound=[];
   for(var ni=0;ni<names.length;ni++){
-    (function(navn){
-      var sym=getSym(navn);
-      if(!sym){notFound.push(norm(navn));done++;if(done===names.length)finishRefresh(updated,notFound);return;}
-      fetchQuote(sym,function(q){
-        if(q){
-          updated++;
-          for(var j=0;j<holdings.length;j++){
-            if(norm(holdings[j].navn)===norm(navn)){
-              holdings[j].kurs=q.price;
-              holdings[j].mv=q.price*holdings[j].antall;
-              holdings[j].dagPct=parseFloat(q.change.toFixed(4));
-              if(holdings[j].kostpris)holdings[j].gevinst=holdings[j].mv-holdings[j].kostpris;
-              holdings[j].live=true;
-            }
-          }
-        }else{notFound.push(sym);}
-        done++;if(done===names.length)finishRefresh(updated,notFound);
-      });
-    })(names[ni]);
+    var navn=names[ni];
+    var sym=getSym(navn);
+    if(!sym){notFound.push(norm(navn));continue;}
+    var q=await new Promise(function(resolve){fetchQuote(sym,resolve);});
+    if(q){
+      updated++;
+      for(var j=0;j<holdings.length;j++){
+        if(norm(holdings[j].navn)===norm(navn)){
+          holdings[j].kurs=q.price;
+          holdings[j].mv=q.price*holdings[j].antall;
+          holdings[j].dagPct=parseFloat(q.change.toFixed(4));
+          if(holdings[j].kostpris)holdings[j].gevinst=holdings[j].mv-holdings[j].kostpris;
+          holdings[j].live=true;
+        }
+      }
+    }else{notFound.push(sym);}
+    renderHoldings();
+    updateMetrics();
   }
+  finishRefresh(updated,notFound);
 }
-
 function finishRefresh(updated,notFound){
   save();renderHoldings();updateMetrics();
   var now=new Date().toLocaleTimeString('nb-NO');
